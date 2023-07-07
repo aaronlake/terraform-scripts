@@ -13,6 +13,7 @@ def cli():
     """Parse CLI arguments."""
     args = argparse.ArgumentParser(description="Count Terraform Cloud Resources")
     args.add_argument("--org", "-o", help="Terraform Cloud Organization", required=True)
+    args.add_argument("--url", "-u", help="Terraform Cloud URL", default=TFC_URL)
 
     return args.parse_args()
 
@@ -32,20 +33,19 @@ def main():
         print("TFC_TOKEN environment variable not set")
         exit(1)
 
-    api = TFC(TFC_TOKEN, url=TFC_URL)
+    api = TFC(TFC_TOKEN, url=args.url)
     api.set_org(args.org)
 
-    all_workspace = api.workspaces.list_all()["data"]
+    all_workspaces = api.workspaces.list_all()["data"]
 
     workspace_data = []
 
-    for workspace in all_workspace:
-        ws_name = workspace["attributes"]["name"]
+    for workspace in all_workspaces:
+        workspace_name = workspace["attributes"]["name"]
         workspace_id = workspace["id"]
         resources = count_resources(api, workspace_id)
-        workspace_data.append((ws_name, workspace_id, resources))
+        workspace_data.append((workspace_name, workspace_id, resources))
 
-    # Sort workspace data by resources count in ascending order
     workspace_data.sort(key=lambda x: x[2])
 
     total_resources = 0
