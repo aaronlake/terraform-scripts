@@ -6,11 +6,15 @@ from terrasnek.api import TFC
 
 TFC_TOKEN = os.getenv("TFC_TOKEN")
 TFC_URL = os.getenv("TFC_URL", "https://app.terraform.io")
-TFC_COST = float(0.00014 * 24)
+TFC_COST = float(0.00014 * 24)  # As of 2023-07-12
 
 
 def cli():
-    """Parse CLI arguments."""
+    """Parse CLI arguments.
+
+    :returns: CLI arguments
+    :rtype: argparse.Namespace
+    """
     args = argparse.ArgumentParser(description="Count Terraform Cloud Resources")
     args.add_argument("--org", "-o", help="Terraform Cloud Organization", required=True)
     args.add_argument("--url", "-u", help="Terraform Cloud URL", default=TFC_URL)
@@ -19,7 +23,16 @@ def cli():
 
 
 def count_resources(api, ws_id):
-    """Count the number of resources in a workspace."""
+    """
+    Count the number of resources in a workspace.
+
+    :param api: TFC API object
+    :type api: terrasnek.api.TFC
+    :param ws_id: Workspace ID
+    :type ws_id: str
+    :returns: Number of resources in a workspace
+    :rtype: int
+    """
     resources = api.workspaces.list_resources(ws_id)["data"]
 
     return len(resources)
