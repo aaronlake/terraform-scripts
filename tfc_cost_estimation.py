@@ -1,12 +1,33 @@
 #!/usr/bin/env python3
 
+"""This script interacts with Terraform Cloud (TFC) to enumerate all the
+workspaces within a specified organization, count the resources in each
+workspace, and estimate their cost.
+
+Usage:
+python3 script.py --org <your_organization> [--url <your_custom_url>].
+Replace <your_organization> with the name of your TFC organization and
+<your_custom_url>.
+"""
+
 import os
 import argparse
+import logging
 from terrasnek.api import TFC
+
+logging.basicConfig(level=logging.INFO)
 
 TFC_TOKEN = os.getenv("TFC_TOKEN")
 TFC_URL = os.getenv("TFC_URL", "https://app.terraform.io")
-TFC_COST = float(0.00014 * 24)  # As of 2023-07-12
+TFC_COST = float(0.00014 * 24)  # As of 2023-07-12, 0.00014 USD per hour
+
+
+class TerraformCloudError(Exception):
+    """Custom exception for Terraform Cloud errors.
+
+    :param Exception: Base exception class
+    :type Exception: Exception
+    """
 
 
 def cli():
@@ -22,20 +43,40 @@ def cli():
     return args.parse_args()
 
 
-def count_resources(api, ws_id):
+def count_resources(api, ws_id: str) -> int:
     """
     Count the number of resources in a workspace.
 
     :param api: TFC API object
     :type api: terrasnek.api.TFC
     :param ws_id: Workspace ID
-    :type ws_id: str
     :returns: Number of resources in a workspace
-    :rtype: int
     """
-    resources = api.workspaces.list_resources(ws_id)["data"]
+    try:
+        resources = api.workspaces.list_resources(ws_id)["data"]
+        return len(resources)
+    except Exception as err:
+        raise TerraformCloudError(f"Error counting resources: {str(err)}") from err
 
-    return len(resources)
+
+def calculate_cost(ws_name: str, ws_id: str, resources: int) -> float:
+    """Calculate the monthly cost of a workspace.
+
+    :param ws_name: Workspace name
+    :param ws_id: Workspace ID
+    :param resources: Number of resources in a workspace
+    :returns: Monthly cost of a workspace
+    """
+
+    total_cost = round(resources * TFC_COST, 4)
+    logging.info(
+        "Workspace: %s (%s - %s resources) - Monthly Cost: $%s",
+        ws_name,
+        ws_id,
+        resources,
+        total_cost,
+    )
+    return total_cost
 
 
 def main():
@@ -46,37 +87,45 @@ def main():
         print("TFC_TOKEN environment variable not set")
         exit(1)
 
-    api = TFC(TFC_TOKEN, url=args.url)
-    api.set_org(args.org)
+    try:
+        api = TFC(TFC_TOKEN, url=args.url)
+        api.set_org(args.org)
+    except Exception as err:
+        print(f"Failed to initialize TFC API: {str(err)}")
+        exit(1)
 
-    all_workspaces = api.workspaces.list_all()["data"]
+    try:
+        all_workspaces = api.workspaces.list_all()["data"]
+    except Exception as err:
+        print(f"Failed to list workspaces: {str(err)}")
+        exit(1)
 
     workspace_data = []
 
     for workspace in all_workspaces:
         workspace_name = workspace["attributes"]["name"]
         workspace_id = workspace["id"]
-        resources = count_resources(api, workspace_id)
-        workspace_data.append((workspace_name, workspace_id, resources))
+
+        try:
+            resources = count_resources(api, workspace_id)
+            workspace_data.append((workspace_name, workspace_id, resources))
+        except TerraformCloudError as err:
+            print(f"Error with workspace {workspace_name}: {str(err)}")
 
     workspace_data.sort(key=lambda x: x[2])
 
     total_resources = 0
+    total_monthly_cost = 0
 
     for ws_name, workspace_id, resources in workspace_data:
         total_resources += resources
-        rounded_cost = round(resources * TFC_COST, 4)
-        print(
-            f"Workspace: {ws_name} ({workspace_id} - {resources} resources) "
-            + f"- Monthly Cost: ${rounded_cost}"
-        )
+        total_monthly_cost += calculate_cost(ws_name, workspace_id, resources)
 
-    rounded_total_cost = round(total_resources * TFC_COST, 4)
-    rounded_yearly_cost = round(rounded_total_cost * 12, 4)
+    total_yearly_cost = round(total_monthly_cost * 12, 4)
 
-    print(f"Total: {total_resources} resources")
-    print(f"Total Monthly Cost: ${rounded_total_cost}")
-    print(f"Total Yearly Cost: ${rounded_yearly_cost}")
+    logging.info("Total Resources: %s", total_resources)
+    logging.info("Total Monthly Cost: $%s", round(total_monthly_cost, 4))
+    logging.info("Total Yearly Cost: $%s", total_yearly_cost)
 
 
 if __name__ == "__main__":
