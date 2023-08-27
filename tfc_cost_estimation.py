@@ -52,11 +52,26 @@ def count_resources(api, ws_id: str) -> int:
     :param ws_id: Workspace ID
     :returns: Number of resources in a workspace
     """
+    total_resources = 0
+    next_url = None
+
     try:
-        resources = api.workspaces.list_resources(ws_id)["data"]
-        return len(resources)
+        while True:
+            if next_url:
+                response = api._get(next_url)
+            else:
+                response = api.workspaces.list_resources(ws_id)
+
+            resources = response["data"]
+            total_resources += len(resources)
+
+            next_url = response.get("links", {}).get("next")
+            if not next_url:
+                break
     except Exception as err:
         raise TerraformCloudError(f"Error counting resources: {str(err)}") from err
+
+    return total_resources
 
 
 def calculate_cost(ws_name: str, ws_id: str, resources: int) -> float:
