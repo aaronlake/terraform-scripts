@@ -36,9 +36,15 @@ def cli():
     :returns: CLI arguments
     :rtype: argparse.Namespace
     """
-    args = argparse.ArgumentParser(description="Count Terraform Cloud Resources")
-    args.add_argument("--org", "-o", help="Terraform Cloud Organization", required=True)
-    args.add_argument("--url", "-u", help="Terraform Cloud URL", default=TFC_URL)
+    args = argparse.ArgumentParser(
+        description="Count Terraform Cloud Resources"
+    )
+    args.add_argument(
+        "--org", "-o", help="Terraform Cloud Organization", required=True
+    )
+    args.add_argument(
+        "--url", "-u", help="Terraform Cloud URL", default=TFC_URL
+    )
 
     return args.parse_args()
 
@@ -69,7 +75,9 @@ def count_resources(api, ws_id: str) -> int:
             if not next_url:
                 break
     except Exception as err:
-        raise TerraformCloudError(f"Error counting resources: {str(err)}") from err
+        raise TerraformCloudError(
+            f"Error counting resources: {str(err)}"
+        ) from err
 
     return total_resources
 
